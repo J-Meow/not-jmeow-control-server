@@ -1,8 +1,19 @@
 const xoxdCookie = `d=${encodeURIComponent(Deno.env.get("USER_XOXD")!)}`
-async function installApp() {
+async function installApp(appId: string) {
+    const appPage = await (
+        await fetch(`https://api.slack.com/apps/${appId}/general`, {
+            headers: {
+                Cookie: xoxdCookie,
+            },
+        })
+    ).text()
+    const clientId = appPage.split("?client_id=")[1].split("&amp;")[0]
+    const scopes = encodeURIComponent(
+        appPage.split("&amp;scope=")[1].split('"')[0],
+    )
     const oauthPage = await (
         await fetch(
-            `https://hackclub.slack.com/oauth?client_id=${Deno.env.get("APP_CLIENT_ID")}&scope=${encodeURIComponent(Deno.env.get("APP_SCOPES")!)}&user_scope=&redirect_uri=&state=&granular_bot_scope=1&single_channel=0&install_redirect=oauth&tracked=1&user_default=0&team=1`,
+            `https://hackclub.slack.com/oauth?client_id=${clientId}&scope=${scopes}&user_scope=&redirect_uri=&state=&granular_bot_scope=1&single_channel=0&install_redirect=oauth&tracked=1&user_default=0&team=1`,
             {
                 headers: {
                     Cookie: xoxdCookie,
@@ -21,19 +32,23 @@ async function installApp() {
                 "Content-Type": "application/x-www-form-urlencoded",
                 Cookie: xoxdCookie,
             },
-            body: `create_authorization=1&client_id=${Deno.env.get("APP_CLIENT_ID")}&state=&granular_bot_scope=1&scope=${encodeURIComponent(Deno.env.get("APP_SCOPES")!)}&user_scope=&redirect_uri=https%3A%2F%2Fapi.slack.com%2Fapps%2F${Deno.env.get("APP_ID")}%2Foauth&install_redirect=oauth&single_channel=&response_type=&response_mode=&nonce=&openid_connect=0&code_challenge=&code_challenge_method=&crumb=${encodeURIComponent(crumb)}`,
+            body: `create_authorization=1&client_id=${clientId}&state=&granular_bot_scope=1&scope=${scopes}&user_scope=&redirect_uri=https%3A%2F%2Fapi.slack.com%2Fapps%2F${appId}%2Foauth&install_redirect=oauth&single_channel=&response_type=&response_mode=&nonce=&openid_connect=0&code_challenge=&code_challenge_method=&crumb=${encodeURIComponent(crumb)}`,
             method: "POST",
             redirect: "manual",
         })
     ).headers.get("location")
-    fetch(oauthFinalURL!, {
-        headers: {
-            Cookie: xoxdCookie,
-        },
-    })
+    const finalData = await (
+        await fetch(oauthFinalURL!, {
+            headers: {
+                Cookie: xoxdCookie,
+            },
+        })
+    ).text()
+    return "xoxb-" + finalData.split('value="xoxb-')[1].split('"')[0]
 }
 
-await installApp()
+const mainAppToken = await installApp(Deno.env.get("APP_ID")!)
+console.log(mainAppToken)
 
 Deno.serve({ port: 7531 }, (_req) => {
     return new Response("")
