@@ -48,8 +48,63 @@ async function installApp(appId: string) {
 }
 
 const mainAppToken = await installApp(Deno.env.get("APP_ID")!)
-console.log(mainAppToken)
+const startMessage = await (
+    await fetch("https://slack.com/api/chat.postMessage", {
+        method: "POST",
+        headers: {
+            Authorization: "Bearer " + mainAppToken,
+            "Content-Type": "application/json; charset=utf-8",
+        },
+        body: JSON.stringify({
+            channel: Deno.env.get("HOME_CHANNEL"),
+            attachments: [
+                {
+                    color: "#00cc00",
+                    blocks: [
+                        {
+                            type: "section",
+                            text: {
+                                type: "plain_text",
+                                text: "Started",
+                                emoji: true,
+                            },
+                        },
+                    ],
+                },
+            ],
+        }),
+    })
+).json()
 
 Deno.serve({ port: 7531 }, (_req) => {
     return new Response("")
 })
+async function existenceMessage() {
+    await fetch("https://slack.com/api/chat.postMessage", {
+        method: "POST",
+        headers: {
+            Authorization: "Bearer " + mainAppToken,
+            "Content-Type": "application/json; charset=utf-8",
+        },
+        body: JSON.stringify({
+            channel: Deno.env.get("HOME_CHANNEL"),
+            thread_ts: startMessage.ts,
+            attachments: [
+                {
+                    color: "#7777cc",
+                    blocks: [
+                        {
+                            type: "section",
+                            text: {
+                                type: "plain_text",
+                                text: "I still exist",
+                                emoji: true,
+                            },
+                        },
+                    ],
+                },
+            ],
+        }),
+    })
+}
+setInterval(existenceMessage, 15 * 60000)
