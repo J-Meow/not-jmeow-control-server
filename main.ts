@@ -1,3 +1,27 @@
+import { decodeBase64 } from "jsr:@std/encoding/base64"
+
+const keyPair = {
+    private: await crypto.subtle.importKey(
+        "pkcs8",
+        decodeBase64(Deno.env.get("PRIVATE_KEY")!),
+        {
+            name: "RSA-OAEP",
+            hash: "SHA-256",
+        },
+        true,
+        ["decrypt"],
+    ),
+    public: await crypto.subtle.importKey(
+        "spki",
+        decodeBase64(Deno.env.get("PUBLIC_KEY")!),
+        {
+            name: "RSA-OAEP",
+            hash: "SHA-256",
+        },
+        true,
+        ["encrypt"],
+    ),
+}
 const xoxdCookie = `d=${encodeURIComponent(Deno.env.get("USER_XOXD")!)}`
 async function installApp(appId: string) {
     const appPage = await (
@@ -76,8 +100,41 @@ const startMessage = await (
     })
 ).json()
 
-Deno.serve({ port: 7531 }, (_req) => {
-    return new Response("")
+const textEncoder = new TextEncoder()
+
+Deno.serve({ port: 7531 }, async (req, connInfo) => {
+    const url = new URL(req.url)
+    const queryParams = url.searchParams
+    if (url.pathname == "/connect") {
+        if (queryParams.get("secret") != Deno.env.get("CONNECTION_SECRET")) {
+            console.log(
+                "Failed connection from IP " +
+                    connInfo.remoteAddr.hostname +
+                    " with invalid connection secret: " +
+                    queryParams.get("secret"),
+            )
+            return new Response(null, { status: 403 })
+        }
+        if (req.headers.get("upgrade") != "websocket") {
+            return new Response(null, { status: 426 })
+        }
+        const { socket, response } = Deno.upgradeWebSocket(req)
+        const tokenBuffer = textEncoder.encode(mainAppToken)
+        const encryptedToken = await crypto.subtle.encrypt(
+            "RSA-OAEP",
+            keyPair.public,
+            tokenBuffer,
+        )
+        socket.addEventListener("open", () => {
+            console.log(
+                "Socket connected from IP " + connInfo.remoteAddr.hostname,
+            )
+            socket.send(encryptedToken)
+        })
+        return response
+        // return new Response(encryptedToken)
+    }
+    return new Response("", { status: 404 })
 })
 async function existenceMessage() {
     await fetch("https://slack.com/api/chat.postMessage", {
