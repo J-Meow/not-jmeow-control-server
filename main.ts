@@ -132,7 +132,6 @@ Deno.serve({ port: 7531 }, async (req, connInfo) => {
             socket.send(encryptedToken)
         })
         return response
-        // return new Response(encryptedToken)
     }
     return new Response("", { status: 404 })
 })
