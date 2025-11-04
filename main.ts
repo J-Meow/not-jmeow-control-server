@@ -107,11 +107,13 @@ Deno.serve({ port: 7531 }, async (req, connInfo) => {
     const queryParams = url.searchParams
     if (url.pathname == "/connect") {
         if (queryParams.get("secret") != Deno.env.get("CONNECTION_SECRET")) {
-            console.log(
+            log(
                 "Failed connection from IP " +
                     connInfo.remoteAddr.hostname +
                     " with invalid connection secret: " +
                     queryParams.get("secret"),
+                true,
+                "🚨",
             )
             return new Response(null, { status: 403 })
         }
@@ -126,8 +128,10 @@ Deno.serve({ port: 7531 }, async (req, connInfo) => {
             tokenBuffer,
         )
         socket.addEventListener("open", () => {
-            console.log(
+            log(
                 "Socket connected from IP " + connInfo.remoteAddr.hostname,
+                false,
+                "🟩",
             )
             socket.send(encryptedToken)
         })
@@ -135,7 +139,48 @@ Deno.serve({ port: 7531 }, async (req, connInfo) => {
     }
     return new Response("", { status: 404 })
 })
+async function log(
+    msg: string,
+    important: boolean = false,
+    emoji: string | null = null,
+) {
+    console.log(emoji ? emoji + " " + msg : msg)
+    await fetch("https://slack.com/api/chat.postMessage", {
+        method: "POST",
+        headers: {
+            Authorization: "Bearer " + mainAppToken,
+            "Content-Type": "application/json; charset=utf-8",
+        },
+        body: JSON.stringify({
+            channel: Deno.env.get("LOGS_CHANNEL"),
+            text: emoji ? emoji + " " + msg : msg,
+            blocks: [
+                {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: (emoji ? emoji + " " : "") + "```" + msg + "```",
+                    },
+                },
+                ...(important
+                    ? [
+                          {
+                              type: "context",
+                              elements: [
+                                  {
+                                      type: "mrkdwn",
+                                      text: "<!channel>",
+                                  },
+                              ],
+                          },
+                      ]
+                    : []),
+            ],
+        }),
+    })
+}
 async function existenceMessage() {
+    log("Still on")
     await fetch("https://slack.com/api/chat.postMessage", {
         method: "POST",
         headers: {
@@ -164,3 +209,4 @@ async function existenceMessage() {
     })
 }
 setInterval(existenceMessage, 15 * 60000)
+log("Started up", true)
