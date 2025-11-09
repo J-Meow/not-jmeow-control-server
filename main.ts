@@ -117,6 +117,10 @@ Deno.serve({ port: 7531 }, async (req, connInfo) => {
             )
             return new Response(null, { status: 403 })
         }
+        if (!queryParams.has("module")) {
+            return new Response(null, { status: 400 })
+        }
+        const moduleName = queryParams.get("module")
         if (req.headers.get("upgrade") != "websocket") {
             return new Response(null, { status: 426 })
         }
@@ -129,11 +133,36 @@ Deno.serve({ port: 7531 }, async (req, connInfo) => {
         )
         socket.addEventListener("open", () => {
             log(
-                "Socket connected from IP " + connInfo.remoteAddr.hostname,
+                "Socket connected from IP " +
+                    connInfo.remoteAddr.hostname +
+                    ", module name: " +
+                    moduleName,
                 false,
                 "🟩",
             )
             socket.send(encryptedToken)
+        })
+        socket.addEventListener("close", () => {
+            log(
+                "Socket disconnected from IP " +
+                    connInfo.remoteAddr.hostname +
+                    ", module name: " +
+                    moduleName,
+                false,
+                "🚫",
+            )
+        })
+        socket.addEventListener("error", (ev) => {
+            log(
+                "Socket error from IP " +
+                    connInfo.remoteAddr.hostname +
+                    ", module name: " +
+                    moduleName +
+                    " with error:\n" +
+                    (ev as ErrorEvent).message,
+                false,
+                "⚠️",
+            )
         })
         return response
     }

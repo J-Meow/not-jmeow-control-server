@@ -26,7 +26,7 @@ const keyPair = {
 const textDecoder = new TextDecoder()
 
 const socket = new WebSocket(
-    "ws://localhost:7531/connect?secret=" +
+    "ws://localhost:7531/connect?module=demoTest&secret=" +
         encodeURIComponent(Deno.env.get("CONNECTION_SECRET")!),
 )
 
