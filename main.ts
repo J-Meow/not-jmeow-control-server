@@ -102,6 +102,8 @@ const startMessage = await (
 
 const textEncoder = new TextEncoder()
 
+const modulesConnected: string[] = []
+
 Deno.serve({ port: 7531 }, async (req, connInfo) => {
     const url = new URL(req.url)
     const queryParams = url.searchParams
@@ -120,7 +122,7 @@ Deno.serve({ port: 7531 }, async (req, connInfo) => {
         if (!queryParams.has("module")) {
             return new Response(null, { status: 400 })
         }
-        const moduleName = queryParams.get("module")
+        const moduleName = queryParams.get("module")!
         if (req.headers.get("upgrade") != "websocket") {
             return new Response(null, { status: 426 })
         }
@@ -141,6 +143,8 @@ Deno.serve({ port: 7531 }, async (req, connInfo) => {
                 "🟩",
             )
             socket.send(encryptedToken)
+            modulesConnected.push(moduleName)
+            log("Connected modules: \n" + modulesConnected.join("\n"))
         })
         socket.addEventListener("close", () => {
             log(
@@ -151,6 +155,8 @@ Deno.serve({ port: 7531 }, async (req, connInfo) => {
                 false,
                 "🚫",
             )
+            modulesConnected.splice(modulesConnected.indexOf(moduleName), 1)
+            log("Connected modules: \n" + modulesConnected.join("\n"))
         })
         socket.addEventListener("error", (ev) => {
             log(
@@ -163,6 +169,8 @@ Deno.serve({ port: 7531 }, async (req, connInfo) => {
                 false,
                 "⚠️",
             )
+            modulesConnected.splice(modulesConnected.indexOf(moduleName), 1)
+            log("Connected modules: \n" + modulesConnected.join("\n"))
         })
         return response
     }
