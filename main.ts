@@ -105,6 +105,8 @@ const textEncoder = new TextEncoder()
 
 const modulesConnected: string[] = []
 
+const eventSockets: { [key: string]: WebSocket[] } = {}
+
 Deno.serve(
     {
         port: 7531,
@@ -136,6 +138,16 @@ Deno.serve(
                 return new Response(null, { status: 426 })
             }
             const { socket, response } = Deno.upgradeWebSocket(req)
+            const eventsListening: string[] = []
+            if (queryParams.has("events")) {
+                eventsListening.push(...queryParams.get("events")!.split(","))
+            }
+            eventsListening.forEach((event) => {
+                if (!Object.keys(eventSockets).includes(event)) {
+                    eventSockets[event] = []
+                }
+                eventSockets[event].push(socket)
+            })
             const tokenBuffer = textEncoder.encode(mainAppToken)
             const encryptedToken = await crypto.subtle.encrypt(
                 "RSA-OAEP",
@@ -147,7 +159,9 @@ Deno.serve(
                     "Socket connected from IP " +
                         connInfo.remoteAddr.hostname +
                         ", module name: " +
-                        moduleName,
+                        moduleName +
+                        ", event subscriptions: " +
+                        eventsListening.join(","),
                     false,
                     "🟩",
                 )
@@ -166,6 +180,12 @@ Deno.serve(
                 )
                 modulesConnected.splice(modulesConnected.indexOf(moduleName), 1)
                 log("Connected modules: \n" + modulesConnected.join("\n"))
+                eventsListening.forEach((event) => {
+                    eventSockets[event].splice(
+                        eventSockets[event].indexOf(socket),
+                        1,
+                    )
+                })
             })
             socket.addEventListener("error", (ev) => {
                 log(
@@ -212,6 +232,22 @@ Deno.serve(
             console.log(reqData)
             if (reqData.type == "url_verification") {
                 return new Response(reqData.challenge)
+            } else if (reqData.type == "event_callback") {
+                const sockets = []
+                if (Object.keys(eventSockets).includes(reqData.event.type)) {
+                    sockets.push(...eventSockets[reqData.event.type])
+                }
+                const eventBuffer = textEncoder.encode(
+                    "event " + JSON.stringify(reqData.event),
+                )
+                const encryptedEvent = await crypto.subtle.encrypt(
+                    "RSA-OAEP",
+                    keyPair.public,
+                    eventBuffer,
+                )
+                sockets.forEach((socket) => {
+                    socket.send(encryptedEvent)
+                })
             }
             return new Response(null, { status: 204 })
         }
