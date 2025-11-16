@@ -216,7 +216,7 @@ Deno.serve(
             const body = await req.text()
             const hmac = createHmac(
                 "sha256",
-                Deno.env.get("SLACK_SIGNING_SECRET"),
+                Deno.env.get("SLACK_SIGNING_SECRET")!,
             )
             hmac.update(
                 `v0:${req.headers.get("X-Slack-Request-Timestamp")}:${body}`,
