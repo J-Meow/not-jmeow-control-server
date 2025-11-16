@@ -213,6 +213,7 @@ Deno.serve(
             if (reqData.type == "url_verification") {
                 return new Response(reqData.challenge)
             }
+            return new Response(null, { status: 204 })
         }
         return new Response("", { status: 404 })
     },
