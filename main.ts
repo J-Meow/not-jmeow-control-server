@@ -104,78 +104,94 @@ const textEncoder = new TextEncoder()
 
 const modulesConnected: string[] = []
 
-Deno.serve({ port: 7531 }, async (req, connInfo) => {
-    const url = new URL(req.url)
-    const queryParams = url.searchParams
-    if (url.pathname == "/connect") {
-        if (queryParams.get("secret") != Deno.env.get("CONNECTION_SECRET")) {
-            log(
-                "Failed connection from IP " +
-                    connInfo.remoteAddr.hostname +
-                    " with invalid connection secret: " +
-                    queryParams.get("secret"),
-                true,
-                "🚨",
+Deno.serve(
+    {
+        port: 7531,
+        cert: Deno.readTextFileSync(Deno.env.get("SSL_CERT_PATH")!),
+        key: Deno.readTextFileSync(Deno.env.get("SSL_KEY_PATH")!),
+    },
+    async (req, connInfo) => {
+        const url = new URL(req.url)
+        const queryParams = url.searchParams
+        if (url.pathname == "/connect") {
+            if (
+                queryParams.get("secret") != Deno.env.get("CONNECTION_SECRET")
+            ) {
+                log(
+                    "Failed connection from IP " +
+                        connInfo.remoteAddr.hostname +
+                        " with invalid connection secret: " +
+                        queryParams.get("secret"),
+                    true,
+                    "🚨",
+                )
+                return new Response(null, { status: 403 })
+            }
+            if (!queryParams.has("module")) {
+                return new Response(null, { status: 400 })
+            }
+            const moduleName = queryParams.get("module")!
+            if (req.headers.get("upgrade") != "websocket") {
+                return new Response(null, { status: 426 })
+            }
+            const { socket, response } = Deno.upgradeWebSocket(req)
+            const tokenBuffer = textEncoder.encode(mainAppToken)
+            const encryptedToken = await crypto.subtle.encrypt(
+                "RSA-OAEP",
+                keyPair.public,
+                tokenBuffer,
             )
-            return new Response(null, { status: 403 })
+            socket.addEventListener("open", () => {
+                log(
+                    "Socket connected from IP " +
+                        connInfo.remoteAddr.hostname +
+                        ", module name: " +
+                        moduleName,
+                    false,
+                    "🟩",
+                )
+                socket.send(encryptedToken)
+                modulesConnected.push(moduleName)
+                log("Connected modules: \n" + modulesConnected.join("\n"))
+            })
+            socket.addEventListener("close", () => {
+                log(
+                    "Socket disconnected from IP " +
+                        connInfo.remoteAddr.hostname +
+                        ", module name: " +
+                        moduleName,
+                    false,
+                    "🚫",
+                )
+                modulesConnected.splice(modulesConnected.indexOf(moduleName), 1)
+                log("Connected modules: \n" + modulesConnected.join("\n"))
+            })
+            socket.addEventListener("error", (ev) => {
+                log(
+                    "Socket error from IP " +
+                        connInfo.remoteAddr.hostname +
+                        ", module name: " +
+                        moduleName +
+                        " with error:\n" +
+                        (ev as ErrorEvent).message,
+                    false,
+                    "⚠️",
+                )
+                modulesConnected.splice(modulesConnected.indexOf(moduleName), 1)
+                log("Connected modules: \n" + modulesConnected.join("\n"))
+            })
+            return response
         }
-        if (!queryParams.has("module")) {
-            return new Response(null, { status: 400 })
+        if (url.pathname == "/slack/events" && req.method == "POST") {
+            const reqData = await req.json()
+            console.log(reqData)
+            if (reqData.type == "url_verification") {
+                return new Response(reqData.challenge)
+            }
         }
-        const moduleName = queryParams.get("module")!
-        if (req.headers.get("upgrade") != "websocket") {
-            return new Response(null, { status: 426 })
-        }
-        const { socket, response } = Deno.upgradeWebSocket(req)
-        const tokenBuffer = textEncoder.encode(mainAppToken)
-        const encryptedToken = await crypto.subtle.encrypt(
-            "RSA-OAEP",
-            keyPair.public,
-            tokenBuffer,
-        )
-        socket.addEventListener("open", () => {
-            log(
-                "Socket connected from IP " +
-                    connInfo.remoteAddr.hostname +
-                    ", module name: " +
-                    moduleName,
-                false,
-                "🟩",
-            )
-            socket.send(encryptedToken)
-            modulesConnected.push(moduleName)
-            log("Connected modules: \n" + modulesConnected.join("\n"))
-        })
-        socket.addEventListener("close", () => {
-            log(
-                "Socket disconnected from IP " +
-                    connInfo.remoteAddr.hostname +
-                    ", module name: " +
-                    moduleName,
-                false,
-                "🚫",
-            )
-            modulesConnected.splice(modulesConnected.indexOf(moduleName), 1)
-            log("Connected modules: \n" + modulesConnected.join("\n"))
-        })
-        socket.addEventListener("error", (ev) => {
-            log(
-                "Socket error from IP " +
-                    connInfo.remoteAddr.hostname +
-                    ", module name: " +
-                    moduleName +
-                    " with error:\n" +
-                    (ev as ErrorEvent).message,
-                false,
-                "⚠️",
-            )
-            modulesConnected.splice(modulesConnected.indexOf(moduleName), 1)
-            log("Connected modules: \n" + modulesConnected.join("\n"))
-        })
-        return response
-    }
-    return new Response("", { status: 404 })
-})
+        return new Response("", { status: 404 })
+    },
+)
 async function log(
     msg: string,
     important: boolean = false,
