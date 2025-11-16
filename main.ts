@@ -1,4 +1,5 @@
 import { decodeBase64 } from "jsr:@std/encoding/base64"
+const { createHmac } = await import("node:crypto")
 
 const keyPair = {
     private: await crypto.subtle.importKey(
@@ -183,7 +184,31 @@ Deno.serve(
             return response
         }
         if (url.pathname == "/slack/events" && req.method == "POST") {
-            const reqData = await req.json()
+            if (
+                Math.abs(
+                    parseInt(req.headers.get("X-Slack-Request-Timestamp")!) -
+                        Math.floor(Date.now() / 1000),
+                ) > 300
+            ) {
+                log("Invalid timestamp blocked")
+                return new Response("", { status: 403 })
+            }
+            const body = await req.text()
+            const hmac = createHmac(
+                "sha256",
+                Deno.env.get("SLACK_SIGNING_SECRET"),
+            )
+            hmac.update(
+                `v0:${req.headers.get("X-Slack-Request-Timestamp")}:${body}`,
+            )
+            if (
+                "v0=" + hmac.digest("hex") !=
+                req.headers.get("X-Slack-Signature")
+            ) {
+                log("Invalid signature blocked")
+                return new Response("", { status: 403 })
+            }
+            const reqData = JSON.parse(body)
             console.log(reqData)
             if (reqData.type == "url_verification") {
                 return new Response(reqData.challenge)
