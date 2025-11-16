@@ -1,6 +1,6 @@
 {
     "tasks": {
-        "dev": "deno run --allow-net --env-file --allow-env --watch main.ts"
+        "dev": "deno run --allow-net --env-file --allow-env --allow-read --watch main.ts"
     },
     "imports": {
         "@std/encoding": "jsr:@std/encoding@^1.0.10"
