@@ -148,7 +148,9 @@ Deno.serve(
                 }
                 eventSockets[event].push(socket)
             })
-            const tokenBuffer = textEncoder.encode(mainAppToken)
+            const tokenBuffer = textEncoder.encode(
+                btoa(encodeURIComponent(mainAppToken)),
+            )
             const encryptedToken = await crypto.subtle.encrypt(
                 "RSA-OAEP",
                 keyPair.public,
@@ -244,16 +246,8 @@ Deno.serve(
                     ) {
                         sockets.push(...eventSockets[reqData.event.type])
                     }
-                    const eventBuffer = textEncoder.encode(
-                        "event " + JSON.stringify(reqData.event),
-                    )
-                    const encryptedEvent = await crypto.subtle.encrypt(
-                        "RSA-OAEP",
-                        keyPair.public,
-                        eventBuffer,
-                    )
                     sockets.forEach((socket) => {
-                        socket.send(encryptedEvent)
+                        socket.send("event " + JSON.stringify(reqData.event))
                     })
                 }
             }
@@ -279,20 +273,14 @@ Deno.serve(
                                 ],
                             )
                         }
-                        const eventBuffer = textEncoder.encode(
-                            "event " +
-                                JSON.stringify({
-                                    type: "interaction-" + action.action_id,
-                                    action,
-                                }),
-                        )
-                        const encryptedEvent = await crypto.subtle.encrypt(
-                            "RSA-OAEP",
-                            keyPair.public,
-                            eventBuffer,
-                        )
                         sockets.forEach((socket) => {
-                            socket.send(encryptedEvent)
+                            socket.send(
+                                "event " +
+                                    JSON.stringify({
+                                        type: "interaction-" + action.action_id,
+                                        action,
+                                    }),
+                            )
                         })
                     },
                 )
