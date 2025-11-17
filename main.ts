@@ -257,31 +257,27 @@ Deno.serve(
                         .slice(1)
                         .join("payload="),
                 )
-                payload.actions.forEach(
-                    async (action: { action_id: string }) => {
-                        const sockets = []
-                        if (
-                            Object.keys(eventSockets).includes(
-                                "interaction-" + action.action_id,
-                            )
-                        ) {
-                            sockets.push(
-                                ...eventSockets[
-                                    "interaction-" + action.action_id
-                                ],
-                            )
-                        }
-                        sockets.forEach((socket) => {
-                            socket.send(
-                                "event " +
-                                    JSON.stringify({
-                                        type: "interaction-" + action.action_id,
-                                        action,
-                                    }),
-                            )
-                        })
-                    },
-                )
+                payload.actions.forEach((action: { action_id: string }) => {
+                    const sockets = []
+                    if (
+                        Object.keys(eventSockets).includes(
+                            "interaction-" + action.action_id,
+                        )
+                    ) {
+                        sockets.push(
+                            ...eventSockets["interaction-" + action.action_id],
+                        )
+                    }
+                    sockets.forEach((socket) => {
+                        socket.send(
+                            "event " +
+                                JSON.stringify({
+                                    type: "interaction-" + action.action_id,
+                                    action,
+                                }),
+                        )
+                    })
+                })
             }
             return new Response(null, { status: 204 })
         }
