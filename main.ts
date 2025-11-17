@@ -343,7 +343,6 @@ async function log(
     })
 }
 async function existenceMessage() {
-    log("Still on")
     await fetch("https://slack.com/api/chat.postMessage", {
         method: "POST",
         headers: {
