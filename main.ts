@@ -203,7 +203,11 @@ Deno.serve(
             })
             return response
         }
-        if (url.pathname == "/slack/events" && req.method == "POST") {
+        if (
+            (url.pathname == "/slack/events" ||
+                url.pathname == "/slack/interactions") &&
+            req.method == "POST"
+        ) {
             if (
                 Math.abs(
                     parseInt(req.headers.get("X-Slack-Request-Timestamp")!) -
@@ -228,26 +232,70 @@ Deno.serve(
                 log("Invalid signature blocked")
                 return new Response("", { status: 403 })
             }
-            const reqData = JSON.parse(body)
-            console.log(reqData)
-            if (reqData.type == "url_verification") {
-                return new Response(reqData.challenge)
-            } else if (reqData.type == "event_callback") {
-                const sockets = []
-                if (Object.keys(eventSockets).includes(reqData.event.type)) {
-                    sockets.push(...eventSockets[reqData.event.type])
+            if (url.pathname == "/slack/events") {
+                const reqData = JSON.parse(body)
+                console.log(reqData)
+                if (reqData.type == "url_verification") {
+                    return new Response(reqData.challenge)
+                } else if (reqData.type == "event_callback") {
+                    const sockets = []
+                    if (
+                        Object.keys(eventSockets).includes(reqData.event.type)
+                    ) {
+                        sockets.push(...eventSockets[reqData.event.type])
+                    }
+                    const eventBuffer = textEncoder.encode(
+                        "event " + JSON.stringify(reqData.event),
+                    )
+                    const encryptedEvent = await crypto.subtle.encrypt(
+                        "RSA-OAEP",
+                        keyPair.public,
+                        eventBuffer,
+                    )
+                    sockets.forEach((socket) => {
+                        socket.send(encryptedEvent)
+                    })
                 }
-                const eventBuffer = textEncoder.encode(
-                    "event " + JSON.stringify(reqData.event),
+            }
+            if (url.pathname == "/slack/interactions") {
+                const payload = JSON.parse(
+                    decodeURIComponent(body)
+                        .replaceAll("+", " ")
+                        .split("payload=")
+                        .slice(1)
+                        .join("payload="),
                 )
-                const encryptedEvent = await crypto.subtle.encrypt(
-                    "RSA-OAEP",
-                    keyPair.public,
-                    eventBuffer,
+                payload.actions.forEach(
+                    async (action: { action_id: string }) => {
+                        const sockets = []
+                        if (
+                            Object.keys(eventSockets).includes(
+                                "interaction-" + action.action_id,
+                            )
+                        ) {
+                            sockets.push(
+                                ...eventSockets[
+                                    "interaction-" + action.action_id
+                                ],
+                            )
+                        }
+                        const eventBuffer = textEncoder.encode(
+                            "event " +
+                                JSON.stringify({
+                                    type: "interaction-" + action.action_id,
+                                    action,
+                                }),
+                        )
+                        const encryptedEvent = await crypto.subtle.encrypt(
+                            "RSA-OAEP",
+                            keyPair.public,
+                            eventBuffer,
+                        )
+                        sockets.forEach((socket) => {
+                            socket.send(encryptedEvent)
+                        })
+                    },
                 )
-                sockets.forEach((socket) => {
-                    socket.send(encryptedEvent)
-                })
             }
             return new Response(null, { status: 204 })
         }
