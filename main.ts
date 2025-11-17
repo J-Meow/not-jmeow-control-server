@@ -148,9 +148,7 @@ Deno.serve(
                 }
                 eventSockets[event].push(socket)
             })
-            const tokenBuffer = textEncoder.encode(
-                btoa(encodeURIComponent(mainAppToken)),
-            )
+            const tokenBuffer = textEncoder.encode(mainAppToken)
             const encryptedToken = await crypto.subtle.encrypt(
                 "RSA-OAEP",
                 keyPair.public,
